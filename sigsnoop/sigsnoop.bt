@@ -49,8 +49,8 @@ BEGIN
 	@SIG_STR[31] = "SIGSYS";
 
 	printf("Tracing signals, hit ctrl-c to end.\n");
-	printf("%-8s %-8s %-16s %-8s %-8s\n",
-		"TIME", "PID", "COMM", "TPID", "SIG");
+	printf("%-8s %-8s %-16s %-8s %-16s %-8s %-16s %-8s\n",
+		"TIME", "PPID", "PCOMM", "PID", "COMM", "TPID", "TCOMM", "SIG");
 }
 
 tracepoint:syscalls:sys_enter_kill,
@@ -61,6 +61,18 @@ tracepoint:syscalls:sys_enter_tgkill
 	@sigs[tid] = args->sig;
 }
 
+macro print_sig($pid, $sig, @SIG_STR)
+{
+	time("%H:%M:%S ");
+	if (@SIG_STR[(uint32)$sig] == "") {
+		printf("%-8d %-16s %-8d %-16s %-8d %-16s %-8d\n",
+			 ppid, pcomm, pid, comm, $pid, comm($pid), $sig);
+	} else {
+		printf("%-8s %-16s %-8d %-16s %-8d %-16s %-8s\n",
+			ppid, pcomm, pid, comm, $pid, comm($pid), @SIG_STR[(uint32)$sig]);
+	}
+}
+
 tracepoint:syscalls:sys_exit_kill,
 tracepoint:syscalls:sys_exit_tkill,
 tracepoint:syscalls:sys_exit_tgkill
@@ -69,13 +81,7 @@ tracepoint:syscalls:sys_exit_tgkill
 	$pid = @pids[tid];
 	$sig = @sigs[tid];
 
-	time("%H:%M:%S ");
-	if (@SIG_STR[$sig] == "") {
-		printf("%-8d %-16s %-8d %-8d\n", pid, comm, $pid, $sig);
-	} else {
-		printf("%-8d %-16s %-8d %-8s\n", pid, comm, $pid, @SIG_STR[$sig]);
-	}
-
+	print_sig($pid, $sig, @SIG_STR);
 	delete(@pids[tid]);
 	delete(@sigs[tid]);
 }
@@ -85,12 +91,9 @@ tracepoint:signal:signal_generate
 	$pid = args->pid;
 	$sig = args->sig;
 
-	time("%H:%M:%S ");
-	if (@SIG_STR[$sig] == "") {
-		printf("%-8d %-16s %-8d %-8d\n", pid, comm, $pid, $sig);
-	} else {
-		printf("%-8d %-16s %-8d %-8s\n", pid, comm, $pid, @SIG_STR[$sig]);
-	}
+	print_sig($pid, $sig, @SIG_STR);
+	delete(@pids[tid]);
+	delete(@sigs[tid]);
 }
 
 END
